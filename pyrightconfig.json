@@ -1,0 +1,13 @@
+{
+    "include": [
+        "src/**/*"
+    ],
+    "python.analysis.extraPaths": [
+        "./src/first"
+    ],
+    "executionEnvironments": [
+        {
+            "root": "src"
+        }
+    ]
+}
