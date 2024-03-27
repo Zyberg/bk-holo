@@ -3,7 +3,8 @@
         "src/**/*"
     ],
     "python.analysis.extraPaths": [
-        "./src/first"
+        "./src/first",
+        "./src/second"
     ],
     "executionEnvironments": [
         {
