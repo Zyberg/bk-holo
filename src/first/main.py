@@ -1,7 +1,6 @@
 from .imageprocessor import ImageProcessor
 
 def main():
-    print('this kinda works')
     directory = 'data'
     image_processor = ImageProcessor(directory)
 

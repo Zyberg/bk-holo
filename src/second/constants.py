@@ -1,0 +1,8 @@
+
+ACTION_SELECT_REFERENCE = 'Select Reference'
+ACTION_SELECT_OBJECT = 'Select Object'
+ACTION_PERFORM_FFT = 'Perform FFT'
+ACTION_RECONSTRUCT = 'Reconstruct'
+ACTION_DISPLAY_REFERENCE = 'Display Reference'
+ACTION_DISPLAY_OBJECT = 'Display Object'
+ACTION_CLOSE = 'Close'

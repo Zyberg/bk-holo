@@ -1,4 +1,5 @@
 from .statemanager import StateManager
+from .constants import *
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -6,81 +7,83 @@ class ApplicationError(Exception):
     pass
 
 class Application:
-    def __init__(self, data_directory):
+    def __init__(self, data_directory, steps_to_run=''):
         self.state_manager = StateManager()
         self.state_manager.load_directory(data_directory)
 
+        # Application automation path
+        self.steps_to_run = steps_to_run
+        self.steps_current = steps_to_run
+
         self.actions = [
             # 'Plot all images',
-            # 'Perform FFT',
-            'Select Reference',
-            'Select Object',
+            ACTION_SELECT_REFERENCE,
+            ACTION_SELECT_OBJECT,
             # 'List Current Selections',
-            'FFT',
-            'Reconstruct',
-            'Display Reference',
-            'Close'
+            ACTION_PERFORM_FFT,
+            ACTION_RECONSTRUCT,
+            ACTION_DISPLAY_REFERENCE,
+            ACTION_DISPLAY_OBJECT,
+            ACTION_CLOSE,
         ]
 
 
-    def run(self, answer=''):
+    def run(self):
         action = None
-        if answer != '':
-            action = self.actions[int(answer[0]) - 1]
-            answer = answer[1:]
+        if self.steps_current != '':
+            action = self.actions[int(self.__act_step()) - 1]
         else:
             action = self.actions[self.__display_options_base(self.actions, 'Select an action:')]
 
-        if action == 'Close':
+        if action == ACTION_CLOSE:
             return
         
-        consumed_answers = self.__perform_action(action, answer if answer != '' else None)
-        answer = answer[consumed_answers:]
+        self.__perform_action(action)
 
-        self.run(answer)
+        self.run()
 
-
-    def __perform_action(self, action, answer = None):
+    def __perform_action(self, action):
         print(f'Performing action "{action}"')
 
-        if action == 'Select Reference':
+        if action == ACTION_SELECT_REFERENCE:
             selection = None
-            if answer == None:
+            if self.steps_current == '':
                 selection = self.__display_options_base(
                     self.state_manager.paths,
                     'Select an image to act as a Reference:'
                 )
             else:
-                selection = int(answer[0]) - 1
+                selection = int(self.__act_step()) - 1
 
             self.state_manager.set_reference(selection)
 
-            return 1 if answer else 0
-
-        elif action == 'Select Object':
+        elif action == ACTION_SELECT_OBJECT:
             selection = None
-            if answer == None:
+            if self.steps_current == '':
                 selection = self.__display_options_base(
                     self.state_manager.paths,
                     'Select an image to act as an Object:'
                 )
             else:
-                selection = int(answer[0]) - 1
+                selection = int(self.__act_step()) - 1
 
             self.state_manager.set_object(selection)
 
-            return 1 if answer else 0
-
-        elif action == 'Display Reference':
+        elif action == ACTION_DISPLAY_REFERENCE:
             plt.imshow(self.state_manager.reference.original)
 
             plt.show()
 
-        elif action == 'FFT':
+        elif action == ACTION_DISPLAY_OBJECT:
+            plt.imshow(self.state_manager.object.original)
+
+            plt.show()
+
+        elif action == ACTION_PERFORM_FFT:
             self.state_manager.reference.get_fft()
             self.state_manager.object.get_fft()
 
-        elif action == 'Reconstruct':
+        elif action == ACTION_RECONSTRUCT:
             fft_reference = self.state_manager.reference.get_fft()
             fft_object = self.state_manager.object.get_fft()
 
@@ -102,6 +105,11 @@ class Application:
 
         return 0
 
+
+    def __act_step(self):
+        step_to_act = self.steps_current[0]
+        self.steps_current = self.steps_current[1:]
+        return step_to_act
 
     def __display_initial_options(self):
         options = self.state_manager.paths
@@ -139,9 +147,9 @@ def main(sequence):
     print('Starting the script...')
     directory = 'data'
 
-    app = Application(directory)
+    app = Application(directory, sequence if sequence is not None else '')
 
-    app.run(sequence if sequence is not None else '')
+    app.run()
 
     print('Closing the script...')
 
