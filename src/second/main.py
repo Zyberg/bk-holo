@@ -1,7 +1,9 @@
 from .statemanager import StateManager
 from .constants import *
+from .hologramreconstructor import HologramReconstructor
 import matplotlib.pyplot as plt
 import numpy as np
+from scipy.fft import fft2, ifft2, fftshift, ifftshift
 
 class ApplicationError(Exception):
     pass
@@ -25,6 +27,9 @@ class Application:
             ACTION_DISPLAY_REFERENCE,
             ACTION_DISPLAY_OBJECT,
             ACTION_CLOSE,
+            ACTION_DISPLAY_FFT_REFERENCE,
+            ACTION_DISPLAY_FFT_OBJECT,
+            # ACTION_DISPLAY_RECONSTRUCTED_PHASE,
         ]
 
 
@@ -83,22 +88,92 @@ class Application:
             self.state_manager.reference.get_fft()
             self.state_manager.object.get_fft()
 
+        elif action == ACTION_DISPLAY_FFT_REFERENCE:
+            magnitude_spectrum = np.abs(self.state_manager.reference.get_fft())
+            plt.imshow(np.log(magnitude_spectrum + 1), cmap='gray')
+
+            plt.show()
+            
+        elif action == ACTION_DISPLAY_FFT_OBJECT:
+            magnitude_spectrum = np.abs(self.state_manager.object.get_fft())
+            plt.imshow(np.log(magnitude_spectrum + 1), cmap='gray')
+
+            plt.show()
+
         elif action == ACTION_RECONSTRUCT:
-            fft_reference = self.state_manager.reference.get_fft()
-            fft_object = self.state_manager.object.get_fft()
+            reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object)
+            reconstructor.plot()
 
-            fft_subtracted = fft_object - fft_reference
-            fft_reconstructed = np.fft.ifft2(fft_subtracted)
+            # fft_reference = self.state_manager.reference.get_fft()
+            # fft_object = self.state_manager.object.get_fft()
 
-            magnitude_spectrum = np.abs(fft_reconstructed)
+            fft_reference = fft2(reference_hologram)
+            fft_object = fft2(object_hologram)
 
-            # TODO: finish the algorithm :)
+            ff = fft_object/fft_reference
+            mask = ff[:ff.shape[0]//2, :ff.shape[1]//2]
 
-            plt.imshow(magnitude_spectrum, cmap='gray')
+            # plt.imshow(np.log(np.abs(mask) + 1), cmap='gray')
+            # plt.show()
+            # interference_pattern = object_hologram - reference_hologram
+
+            # plt.imshow(interference_pattern, cmap='gray')
+
+            # plt.show()
+            # Extract twin images from the hologram Fourier transform
+            # twin_image1, twin_image2 = extract_twin_images(reference_hologram, object_hologram)
+            # chosen_twin_image = twin_image1 if np.sum(np.abs(twin_image1)) > np.sum(np.abs(twin_image2)) else twin_image2
+
+            reconstructed_phase, reconstructed_intensity = reconstruct_phase_and_intensity(mask, reference_hologram)
+
+            # Create a mask highlighting the space that is masked out
+            # mask = np.abs(twin_image1)
+            
+            # mask[np.where(chosen_twin_image == 0)] = 1
+
+            # Reconstruct object from the first twin image
+            # reconstructed_object_image = reconstruct_object_from_twin(twin_image1)
+
+            # fft_reconstructed = ifft2(fft_subtracted)
+
+            # magnitude_spectrum = np.abs(fft_reconstructed)
+            # reconstructed_phase_gs = reconstruct_phase_off_axis(reference_hologram, object_hologram)
+            # reconstructed_phase_gs = gersbach_phase_retrieval(reference_hologram, object_hologram)
+            # phase_spectrum = reconstruct_phase_TIE(interference_pattern)
+
+            # Reconstruct real object image
+            # reconstructed_object_image = reconstruct_object_image(reconstructed_phase_gs, object_hologram)
+
+            # plt.imshow(phase_spectrum, cmap='gray')
+            # plt.imshow(magnitude_spectrum, cmap='gray')
+
 
             # TODO: probably need to decouple this step somehow
 
+            # Plotting
+            fig, axes = plt.subplots(1, 4, figsize=(18, 6))
+
+            # Original image
+            axes[0].imshow(object_hologram, cmap='gray')
+            axes[0].set_title('Original Image')
+
+            # Reconstructed phase
+            axes[1].imshow(reconstructed_phase, cmap='gray')
+            axes[1].set_title('Reconstructed Phase (GS Algorithm)')
+
+            # Reconstructed real object image
+            axes[2].imshow(reconstructed_intensity, cmap='gray')
+            axes[2].set_title('Reconstructed Real Object Image')
+
+            axes[3].imshow(np.abs(mask), cmap='gray')
+            axes[3].set_title('Masked Out Space')
+
+            plt.tight_layout()
             plt.show()
+
+
+        elif action == ACTION_DISPLAY_RECONSTRUCTED_PHASE:
+            pass
 
         else:
             raise ApplicationError("Selected action is not defined")
