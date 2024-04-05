@@ -2,6 +2,64 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
+from matplotlib.widgets import Slider, RadioButtons
+
+MASK_SHAPE_OPTIONS = ('Square', 'Circle')
+
+INITIAL_MASK_POSITION = 1000
+INITIAL_MASK_WIDTH = 200
+INITIAL_MASK_SHAPE_INDEX = 1
+
+def crop_image_with_mask(image, mask):
+    """
+    Crop the image to include only the region specified by the mask 
+
+    Parameters:
+        image (ndarray): Input image.
+        mask (ndarray): Mask specifying the region of interest.
+
+    Returns:
+        ndarray: Cropped image containing only the region specified by the mask.
+    """
+    masked_image = image * mask
+
+    # Find the bounding box of the mask
+    rows, cols = np.nonzero(mask)
+    min_row, max_row = min(rows), max(rows)
+    min_col, max_col = min(cols), max(cols)
+    
+    # Crop the image according to the bounding box
+    cropped_image = masked_image[min_row:max_row+1, min_col:max_col+1]
+    
+    
+    return cropped_image
+
+def crop_and_center_image(image, mask):
+    """
+    Crop the image to include only the region specified by the mask, and center it on a black image with the same dimensions as the initial image.
+
+    Parameters:
+        image (ndarray): Input image.
+        mask (ndarray): Mask specifying the region of interest.
+
+    Returns:
+        ndarray: Cropped and centered image on a black background.
+    """
+    # Obtain the cropped image based on the mask
+    cropped_image = crop_image_with_mask(image, mask)
+
+    # Create a black image with the same dimensions as the initial image
+    black_image = np.zeros_like(image, dtype=image.dtype)
+
+    # Calculate the position to place the cropped image in the black image to center it
+    start_row = (black_image.shape[0] - cropped_image.shape[0]) // 2
+    start_col = (black_image.shape[1] - cropped_image.shape[1]) // 2
+
+    # Place the cropped image onto the black image at the calculated position
+    black_image[start_row:start_row+cropped_image.shape[0], 
+                start_col:start_col+cropped_image.shape[1]] = cropped_image
+
+    return black_image
 
 class HologramReconstructor:
     def __init__(self, reference_hologram_image, object_hologram_image):
@@ -15,6 +73,12 @@ class HologramReconstructor:
 
         self.isolated_image_fft = None
 
+        self.mask_position = INITIAL_MASK_POSITION
+
+        maximum_mask_width = self.object_hologram_image.array.shape[0] // 2
+        self.mask_width = INITIAL_MASK_WIDTH if INITIAL_MASK_WIDTH < maximum_mask_width else maximum_mask_width
+        self.mask_shape = MASK_SHAPE_OPTIONS[INITIAL_MASK_SHAPE_INDEX]
+
         # These variables are set for debug purposes only
         self.interference_pattern = None
         self.shifted_interference_pattern = None
@@ -24,21 +88,30 @@ class HologramReconstructor:
         self.reference_hologram = self.reference_hologram_image.array.astype(np.float32)
         self.object_hologram = self.object_hologram_image.array.astype(np.float32)
 
-
     def extract_twin_image(self):
         reference_fft = self.reference_hologram_image.get_fft()
         object_fft = self.object_hologram_image.get_fft()
 
         # Compute the ratio of the Fourier transforms to obtain the interference pattern
-        self.interference_pattern = object_fft / reference_fft # * np.conj(reference_fft)
+        self.interference_pattern = object_fft #/ reference_fft # * np.conj(reference_fft)
 
         # Shift the zero-frequency (DC) component to the center of the Fourier domain
         self.shifted_interference_pattern = fftshift(self.interference_pattern)
 
-        mask = make_first_quadrant_mask(self.interference_pattern.shape[0])
+        self.mask_size = self.shifted_interference_pattern.shape[0]
+        mask = None
+        if self.mask_shape == MASK_SHAPE_OPTIONS[0]:
+            print('making square')
+            mask = make_square_mask(self.mask_size, self.mask_width, self.mask_position)
+        elif self.mask_shape == MASK_SHAPE_OPTIONS[1]:
+            print('making circle')
+            mask = make_circle_mask(self.mask_size, self.mask_width, self.mask_position)
+        # mask = make_first_quadrant_mask(self.shifted_interference_pattern.shape[0])
         # mask = make_true_mask(self.interference_pattern.shape[0])
 
-        self.isolated_image_fft = self.interference_pattern * mask
+        isolated_image_fft = crop_and_center_image(self.shifted_interference_pattern, mask)
+
+        self.isolated_image_fft = isolated_image_fft
 
     def reconstruct_phase_and_intensity(self):
         if self.isolated_image_fft is None:
@@ -62,11 +135,11 @@ class HologramReconstructor:
 
         self.reconstruct_phase_and_intensity()
 
-    def plot_unmasked_region(self):
-        if self.isolated_image_fft is None:
+    def plot_unmasked_region(self, axis = None):
+        if axis is not None or self.isolated_image_fft is None:
             self.extract_twin_image()
 
-        ax = self.__get_ax()
+        ax = self.__get_ax() if axis is None else axis
 
         ax.imshow(np.log(np.abs(self.isolated_image_fft) + 1), cmap='gray')
         ax.set_title('Isolated twin image (FFT)')
@@ -109,11 +182,11 @@ class HologramReconstructor:
         ax.set_title('Reconstructed Phase')
         return ax
 
-    def plot_reconstructed_intensity(self):
-        if self.reconstructed_intensity is None:
+    def plot_reconstructed_intensity(self, axis = None):
+        if axis is not None or self.reconstructed_intensity is None:
             self.reconstruct()
 
-        ax = self.__get_ax()
+        ax = self.__get_ax() if axis is None else axis
 
         ax.imshow(self.reconstructed_intensity, cmap='gray')
         ax.set_title('Reconstructed Intensity')
@@ -123,14 +196,95 @@ class HologramReconstructor:
         self.plot_manager = PlotManager()
 
         self.plot_object_original()
-        self.plot_interference_pattern()
+        # self.plot_interference_pattern()
         # self.plot_shifted_interference_pattern()
         self.plot_unmasked_region()
-        self.plot_reconstructed_phase()
+        # self.plot_reconstructed_phase()
         self.plot_reconstructed_intensity()
 
         plt.tight_layout()
         plt.show()
+
+
+    def plot_setup_interactive(self):
+        axis_unmasked_region = self.plot_unmasked_region()
+        axis_reconstructed_intensity = self.plot_reconstructed_intensity()
+
+        # Define the positions and sizes of sliders and radio buttons
+        slider_position_args = [0.2, 0.5, 0.65, 0.1]
+        slider_width_args = [0.2, 0.4, 0.65, 0.1]
+        radio_buttons_args = [0.2, 0.25, 0.5, 0.15]
+
+        # Create a figure for the sliders
+        figure_sliders = plt.figure(figsize=(6, 3)) 
+
+        # Define axis
+        axis_slider_mask_position = figure_sliders.add_axes(slider_position_args, facecolor='lightgoldenrodyellow')
+        axis_slider_mask_width = figure_sliders.add_axes(slider_width_args, facecolor='lightgoldenrodyellow')
+
+        axis_radio_mask_shape = figure_sliders.add_axes(radio_buttons_args, facecolor='lightgoldenrodyellow')
+
+        # Define slider
+        slider_mask_position = Slider(
+            axis_slider_mask_position,
+            'Mask Position (xy)',
+            0,
+            self.object_hologram_image.array.shape[0] - self.mask_width,
+            valinit=INITIAL_MASK_POSITION
+        )
+
+        slider_mask_width = Slider(
+            axis_slider_mask_width,
+            'Mask Width',
+            0,
+            self.object_hologram_image.array.shape[0] // 2,
+            valinit=INITIAL_MASK_WIDTH
+        )
+
+        radio_mask_shape = RadioButtons(
+            axis_radio_mask_shape,
+            MASK_SHAPE_OPTIONS,
+            active = INITIAL_MASK_SHAPE_INDEX
+        )
+
+        # Add slider callback
+        def callback_update_masked_region(value):
+            # Update state
+            self.mask_position = int(slider_mask_position.val)
+            self.mask_width = int(slider_mask_width.val)
+            self.mask_shape = radio_mask_shape.value_selected
+
+            # Update relevant plots
+            self.plot_unmasked_region(axis_unmasked_region)
+            self.plot_reconstructed_intensity(axis_reconstructed_intensity)
+
+            self.plot_manager.figure.canvas.draw_idle()
+
+        # Add update events
+        slider_mask_position.on_changed(callback_update_masked_region)
+        slider_mask_width.on_changed(callback_update_masked_region)
+        radio_mask_shape.on_clicked(callback_update_masked_region)
+
+
+        # Set the position of the figure windows
+        return figure_sliders
+
+    def plot_interactive(self):
+        self.plot_manager = PlotManager()
+
+        figure_sliders = self.plot_setup_interactive()
+        # self.plot_reconstructed_intensity()
+
+        # Set window positions
+        figure_sliders.canvas.manager.window.setGeometry(900, 100, 800, 400)
+        self.plot_manager.figure.canvas.manager.window.setGeometry(100, 100, 800, 600)
+
+        # Set window titles
+        figure_sliders.canvas.manager.window.setWindowTitle("Options")
+        self.plot_manager.figure.canvas.manager.window.setWindowTitle("Holography Reconstruction Plots")
+
+        plt.show()
+
     
     def __get_ax(self):
         if self.plot_manager is None:
@@ -184,6 +338,17 @@ class PlotManager:
 
 
 # TODO: move to another file
+def make_square_mask(size, mask_size, position):
+    mask = np.zeros((size, size))
+    mask[position:position+mask_size, position:position+mask_size] = 1
+    return mask
+
+def make_circle_mask(size, mask_size, position):
+    y, x = np.ogrid[:size, :size]
+    mask = np.zeros((size, size), dtype=bool)
+    mask = (x - position)**2 + (y - position)**2 <= (mask_size)**2
+    return mask
+
 def make_first_quadrant_mask(size):
     mask = np.zeros((size, size))
     mask[:size//2, :size//2] = 1

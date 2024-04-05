@@ -1,6 +1,7 @@
 from .statemanager import StateManager
 from .constants import *
 from .hologramreconstructor import HologramReconstructor
+from .twinimagecropper import TwinImageCropper
 import matplotlib.pyplot as plt
 import numpy as np
 from scipy.fft import fft2, ifft2, fftshift, ifftshift
@@ -102,7 +103,21 @@ class Application:
 
         elif action == ACTION_RECONSTRUCT:
             reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object)
-            reconstructor.plot()
+            
+            twin_image_cropper = TwinImageCropper(self.state_manager.object)
+
+            # Adjust the threshold value as needed
+            threshold_value = 100  # Adjust this value based on the intensity distribution of your hologram FFT image
+
+            # Find the cropping region around the twin images
+            # cropping_region = twin_image_cropper.find_twin_image_cropping_region()
+
+            # # Print the cropping region (xmin, ymin, xmax, ymax)
+            # print("Cropping Region:", cropping_region)
+
+            
+            # reconstructor.plot()
+            reconstructor.plot_interactive()
 
             # # fft_reference = self.state_manager.reference.get_fft()
             # # fft_object = self.state_manager.object.get_fft()
