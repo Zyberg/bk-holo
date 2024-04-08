@@ -70,6 +70,7 @@ class HologramReconstructor:
         self.reconstructed_intensity = None
 
         self.plot_manager = None
+        self.plot_interactive_controls = None
 
         self.isolated_image_fft = None
 
@@ -78,6 +79,10 @@ class HologramReconstructor:
         maximum_mask_width = self.object_hologram_image.array.shape[0] // 2
         self.mask_width = INITIAL_MASK_WIDTH if INITIAL_MASK_WIDTH < maximum_mask_width else maximum_mask_width
         self.mask_shape = MASK_SHAPE_OPTIONS[INITIAL_MASK_SHAPE_INDEX]
+
+        # Variables for interactive plotting
+        self.axis_unmasked_region = None
+        self.axis_reconstructed_intensity = None 
 
         # These variables are set for debug purposes only
         self.interference_pattern = None
@@ -135,15 +140,16 @@ class HologramReconstructor:
 
         self.reconstruct_phase_and_intensity()
 
-    def plot_unmasked_region(self, axis = None):
-        if axis is not None or self.isolated_image_fft is None:
+    def plot_unmasked_region(self):
+        if self.axis_unmasked_region is not None or self.isolated_image_fft is None:
             self.extract_twin_image()
 
-        ax = self.__get_ax() if axis is None else axis
+        if self.axis_unmasked_region is None:
+            self.axis_unmasked_region = self.__get_ax()
 
-        ax.imshow(np.log(np.abs(self.isolated_image_fft) + 1), cmap='gray')
-        ax.set_title('Isolated twin image (FFT)')
-        return ax
+        self.axis_unmasked_region.imshow(np.log(np.abs(self.isolated_image_fft) + 1), cmap='gray')
+        self.axis_unmasked_region.set_title('Isolated twin image (FFT)')
+        return self.axis_unmasked_region
 
     def plot_interference_pattern(self):
         if self.interference_pattern is None:
@@ -182,15 +188,16 @@ class HologramReconstructor:
         ax.set_title('Reconstructed Phase')
         return ax
 
-    def plot_reconstructed_intensity(self, axis = None):
-        if axis is not None or self.reconstructed_intensity is None:
+    def plot_reconstructed_intensity(self):
+        if self.axis_reconstructed_intensity is not None or self.reconstructed_intensity is None:
             self.reconstruct()
 
-        ax = self.__get_ax() if axis is None else axis
+        if self.axis_reconstructed_intensity is None:
+            self.axis_reconstructed_intensity = self.__get_ax()
 
-        ax.imshow(self.reconstructed_intensity, cmap='gray')
-        ax.set_title('Reconstructed Intensity')
-        return ax
+        self.axis_reconstructed_intensity.imshow(self.reconstructed_intensity, cmap='gray')
+        self.axis_reconstructed_intensity.set_title('Reconstructed Intensity')
+        return self.axis_reconstructed_intensity
 
     def plot(self):
         self.plot_manager = PlotManager()
@@ -205,84 +212,43 @@ class HologramReconstructor:
         plt.tight_layout()
         plt.show()
 
+    # TODO: this method is a little too coupled
+    def callback_update_interactive_plots(self, value):
+        # Update state
+        self.mask_position = int(self.plot_interactive_controls.slider_mask_position.val)
+        self.mask_width = int(self.plot_interactive_controls.slider_mask_width.val)
+        self.mask_shape = self.plot_interactive_controls.radio_mask_shape.value_selected
 
-    def plot_setup_interactive(self):
-        axis_unmasked_region = self.plot_unmasked_region()
-        axis_reconstructed_intensity = self.plot_reconstructed_intensity()
+        # Update relevant plots
+        self.plot_unmasked_region()
+        self.plot_reconstructed_intensity()
 
-        # Define the positions and sizes of sliders and radio buttons
-        slider_position_args = [0.2, 0.5, 0.65, 0.1]
-        slider_width_args = [0.2, 0.4, 0.65, 0.1]
-        radio_buttons_args = [0.2, 0.25, 0.5, 0.15]
-
-        # Create a figure for the sliders
-        figure_sliders = plt.figure(figsize=(6, 3)) 
-
-        # Define axis
-        axis_slider_mask_position = figure_sliders.add_axes(slider_position_args, facecolor='lightgoldenrodyellow')
-        axis_slider_mask_width = figure_sliders.add_axes(slider_width_args, facecolor='lightgoldenrodyellow')
-
-        axis_radio_mask_shape = figure_sliders.add_axes(radio_buttons_args, facecolor='lightgoldenrodyellow')
-
-        # Define slider
-        slider_mask_position = Slider(
-            axis_slider_mask_position,
-            'Mask Position (xy)',
-            0,
-            self.object_hologram_image.array.shape[0] - self.mask_width,
-            valinit=INITIAL_MASK_POSITION
-        )
-
-        slider_mask_width = Slider(
-            axis_slider_mask_width,
-            'Mask Width',
-            0,
-            self.object_hologram_image.array.shape[0] // 2,
-            valinit=INITIAL_MASK_WIDTH
-        )
-
-        radio_mask_shape = RadioButtons(
-            axis_radio_mask_shape,
-            MASK_SHAPE_OPTIONS,
-            active = INITIAL_MASK_SHAPE_INDEX
-        )
-
-        # Add slider callback
-        def callback_update_masked_region(value):
-            # Update state
-            self.mask_position = int(slider_mask_position.val)
-            self.mask_width = int(slider_mask_width.val)
-            self.mask_shape = radio_mask_shape.value_selected
-
-            # Update relevant plots
-            self.plot_unmasked_region(axis_unmasked_region)
-            self.plot_reconstructed_intensity(axis_reconstructed_intensity)
-
-            self.plot_manager.figure.canvas.draw_idle()
-
-        # Add update events
-        slider_mask_position.on_changed(callback_update_masked_region)
-        slider_mask_width.on_changed(callback_update_masked_region)
-        radio_mask_shape.on_clicked(callback_update_masked_region)
-
-
-        # Set the position of the figure windows
-        return figure_sliders
+        # Redraw
+        self.plot_manager.figure.canvas.draw_idle()
 
     def plot_interactive(self):
         self.plot_manager = PlotManager()
 
-        figure_sliders = self.plot_setup_interactive()
-        # self.plot_reconstructed_intensity()
+        max_mask_position = self.object_hologram_image.array.shape[0] - self.mask_width
+        max_mask_width = self.object_hologram_image.array.shape[0] // 2
+        self.plot_interactive_controls = PlotInteractiveControls(max_mask_position, max_mask_width)
+
+        # Set event handlers
+        self.plot_interactive_controls.slider_mask_position.on_changed(self.callback_update_interactive_plots)
+        self.plot_interactive_controls.slider_mask_width.on_changed(self.callback_update_interactive_plots)
+        self.plot_interactive_controls.radio_mask_shape.on_clicked(self.callback_update_interactive_plots)
 
         # Set window positions
-        figure_sliders.canvas.manager.window.setGeometry(900, 100, 800, 400)
-        self.plot_manager.figure.canvas.manager.window.setGeometry(100, 100, 800, 600)
+        self.plot_interactive_controls.figure.canvas.manager.window.setGeometry(1200, 0, 800, 400)
+        self.plot_manager.figure.canvas.manager.window.setGeometry(0, 0, 1200, 1000)
 
         # Set window titles
-        figure_sliders.canvas.manager.window.setWindowTitle("Options")
+        self.plot_interactive_controls.figure.canvas.manager.window.setWindowTitle("Options")
         self.plot_manager.figure.canvas.manager.window.setWindowTitle("Holography Reconstruction Plots")
 
+        # Plot with initial arguments
+        self.plot_unmasked_region()
+        self.plot_reconstructed_intensity()
         plt.show()
 
     
@@ -294,6 +260,53 @@ class HologramReconstructor:
 
         return ax
 
+
+# TODO: move to another file
+class PlotInteractiveControls:
+    def __init__(self, max_mask_position, max_mask_width):
+        self.figure = plt.figure(figsize=(6, 3)) 
+
+        self.slider_mask_position = None
+        self.slider_mask_width = None 
+        self.radio_mask_shape = None
+
+        self.max_mask_position = max_mask_position
+        self.max_mask_width = max_mask_width
+
+        self.__initialize_controls()
+
+    def __initialize_controls(self):
+        # Define the positions and sizes of sliders and radio buttons
+        slider_mask_position_args = [0.2, 0.5, 0.65, 0.1]
+        slider_mask_width_args = [0.2, 0.4, 0.65, 0.1]
+        radio_buttons_args = [0.2, 0.25, 0.5, 0.15]
+
+        # Define sliders
+        self.slider_mask_position = Slider(
+            self.__get_control_axis(slider_mask_position_args),
+            'Mask Position (xy)',
+            0,
+            self.max_mask_position,
+            valinit=INITIAL_MASK_POSITION
+        )
+
+        self.slider_mask_width = Slider(
+            self.__get_control_axis(slider_mask_width_args),
+            'Mask Width',
+            0,
+            self.max_mask_width,
+            valinit=INITIAL_MASK_WIDTH
+        )
+
+        # Define radio buttons
+        self.radio_mask_shape = RadioButtons(
+            self.__get_control_axis(radio_buttons_args),
+            MASK_SHAPE_OPTIONS,
+            active = INITIAL_MASK_SHAPE_INDEX
+        )
+
+    def __get_control_axis(self, position, facecolor = 'lightgoldenrodyellow'):
+        return self.figure.add_axes(position, facecolor=facecolor)
 
  
 # TODO: move to another file
