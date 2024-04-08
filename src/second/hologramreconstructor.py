@@ -88,11 +88,6 @@ class HologramReconstructor:
         self.interference_pattern = None
         self.shifted_interference_pattern = None
 
-
-        # TODO: don't use these
-        self.reference_hologram = self.reference_hologram_image.array.astype(np.float32)
-        self.object_hologram = self.object_hologram_image.array.astype(np.float32)
-
     def extract_twin_image(self):
         reference_fft = self.reference_hologram_image.get_fft()
         object_fft = self.object_hologram_image.get_fft()
