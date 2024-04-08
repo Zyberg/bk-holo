@@ -2,10 +2,53 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 # from scipy.fft import fft2, ifft2, fftshift, ifftshift
-from pyfftw.interfaces.numpy_fft import fft2, ifft2, fftshift, ifftshift
+from numpy.fft import fft2, ifft2, fftshift, ifftshift
+import pyfftw
 from matplotlib.widgets import Slider, RadioButtons
 
 MASK_SHAPE_OPTIONS = ('Square', 'Circle')
+
+def angular_spectrum(complex_field, wavelength, pixel_size, propagation_distance):
+    """
+    Perform numerical propagation using the angular spectrum method.
+
+    Parameters:
+    - complex_field: 2D array containing the complex field distribution at the hologram plane
+    - wavelength: Wavelength of the light (in meters)
+    - pixel_size: Size of a pixel on the sensor (in meters)
+    - propagation_distance: Distance to propagate the field (in meters)
+
+    Returns:
+    - propagated_field: 2D array containing the complex field distribution at the desired distance
+    """
+
+    # Compute the size of the input field
+    rows, cols = complex_field.shape
+    nyquist_sampling = 1 / (2 * pixel_size)
+
+    # Compute the frequencies in the x and y directions
+    u = np.fft.fftfreq(cols, pixel_size)
+    v = np.fft.fftfreq(rows, pixel_size)
+
+    # Compute the spatial frequencies grid
+    u_grid, v_grid = np.meshgrid(u, v, indexing='xy')
+
+    # Compute the wave number
+    k = 2 * np.pi / wavelength
+
+    # Compute the transfer function
+    transfer_function = np.exp(1j * k * np.sqrt(1 - (wavelength * u_grid) ** 2 - (wavelength * v_grid) ** 2))
+
+    # Apply Fourier transform to the input field
+    complex_field_fft = fft2(complex_field)
+
+    # Apply transfer function in the frequency domain
+    complex_field_propagated_fft = complex_field_fft * transfer_function
+
+    # Perform inverse Fourier transform to obtain the propagated field
+    propagated_field = ifft2(complex_field_propagated_fft)
+
+    return propagated_field
 
 def crop_image_with_mask(image, mask):
     """
@@ -59,7 +102,7 @@ def crop_and_center_image(image, mask):
     return black_image
 
 class HologramReconstructor:
-    def __init__(self, reference_hologram_image, object_hologram_image, mask_position, mask_width, mask_shape_index, twin_images_coordinates):
+    def __init__(self, reference_hologram_image, object_hologram_image, propagation_distance, mask_position, mask_width, mask_shape_index, twin_images_coordinates):
         self.reference_hologram_image = reference_hologram_image
         self.object_hologram_image = object_hologram_image
 
@@ -72,6 +115,7 @@ class HologramReconstructor:
         self.isolated_image_fft = None
         self.display_mask = None
 
+        self.propagation_distance = propagation_distance
         self.mask_position = mask_position
         self.mask_width = mask_width
         self.mask_shape_index = mask_shape_index
@@ -83,6 +127,10 @@ class HologramReconstructor:
 
         self.mask_size = None
         self.trigger_callback_sliders = True
+
+        # Speed up fft
+        pyfftw.interfaces.cache.enable()
+        pyfftw.interfaces.cache.set_keepalive_time(60)
 
         # These variables are set for debug purposes only
         self.interference_pattern = None
@@ -119,18 +167,14 @@ class HologramReconstructor:
         if self.isolated_image_fft is None:
             self.extract_twin_image()
 
-        # isolated_image_fft = self.isolated_image_fft[:self.isolated_image_fft.shape[0] // 2, :self.isolated_image_fft.shape[1] // 2]
+        reconstructed_field = ifft2(self.isolated_image_fft)
 
-        reconstructed_image = ifft2(self.isolated_image_fft)
-        self.reconstructed_phase = np.angle(reconstructed_image)
-        self.reconstructed_intensity = np.abs(reconstructed_image)**2
+        print(self.propagation_distance)
+        propagated_field = angular_spectrum(reconstructed_field, 6.328e-7, 3.45e-6, self.propagation_distance // 10)
 
-
-        # Normalize intensity for visualization
-        # self.reconstructed_intensity = (self.reconstructed_intensity - np.min(self.reconstructed_intensity)) / (np.max(self.reconstructed_intensity) - np.min(self.reconstructed_intensity))
-
-
-        print(np.min(self.reconstructed_intensity), np.max(self.reconstructed_intensity))
+        # self.reconstructed_phase = np.angle(reconstructed_field)
+        # self.reconstructed_intensity = np.abs(reconstructed_field)**2
+        self.reconstructed_intensity = np.abs(propagated_field)**2
 
     def reconstruct(self):
         self.extract_twin_image()
@@ -241,11 +285,12 @@ class HologramReconstructor:
             return
         
         # Update state
+        self.propagation_distance = self.plot_interactive_controls.slider_propagation_distance.val
         self.mask_position[0] = int(self.plot_interactive_controls.slider_mask_position_x.val)
         self.mask_position[1] = int(self.plot_interactive_controls.slider_mask_position_y.val)
         self.mask_width = int(self.plot_interactive_controls.slider_mask_width.val)
         self.mask_shape = self.plot_interactive_controls.radio_mask_shape.value_selected
-        
+
         self.__callback_draw()
 
     def __callback_draw(self):
@@ -261,9 +306,10 @@ class HologramReconstructor:
 
         max_mask_position = self.object_hologram_image.array.shape[0] - self.mask_width
         max_mask_width = self.object_hologram_image.array.shape[0] // 2
-        self.plot_interactive_controls = PlotInteractiveControls(self.mask_position, self.mask_width, self.mask_shape_index, max_mask_position, max_mask_width, 0)
+        self.plot_interactive_controls = PlotInteractiveControls(self.mask_position, self.mask_width, self.mask_shape_index, max_mask_position, max_mask_width, 0, self.propagation_distance)
 
         # Set event handlers
+        self.plot_interactive_controls.slider_propagation_distance.on_changed(self.callback_update_interactive_plots)
         self.plot_interactive_controls.slider_mask_position_x.on_changed(self.callback_update_interactive_plots)
         self.plot_interactive_controls.slider_mask_position_y.on_changed(self.callback_update_interactive_plots)
         self.plot_interactive_controls.slider_mask_width.on_changed(self.callback_update_interactive_plots)
@@ -296,9 +342,10 @@ class HologramReconstructor:
 
 # TODO: move to another file
 class PlotInteractiveControls:
-    def __init__(self, mask_position, mask_width, mask_shape_index, max_mask_position, max_mask_width, twin_image_index):
+    def __init__(self, mask_position, mask_width, mask_shape_index, max_mask_position, max_mask_width, twin_image_index, propagation_distance):
         self.figure = plt.figure(figsize=(6, 3)) 
 
+        self.slider_propagation_distance = None
         self.slider_mask_position_x = None
         self.slider_mask_position_y = None
         self.slider_mask_width = None 
@@ -309,6 +356,7 @@ class PlotInteractiveControls:
         self.mask_width = mask_width
         self.mask_shape_index = mask_shape_index
         self.twin_image_index = twin_image_index
+        self.propagation_distance = propagation_distance
 
         self.max_mask_position = max_mask_position
         self.max_mask_width = max_mask_width
@@ -317,6 +365,7 @@ class PlotInteractiveControls:
 
     def __initialize_controls(self):
         # Define the positions and sizes of sliders and radio buttons
+        slider_propagation_distance_args = [0.2, 0.8, 0.65, 0.1]
         slider_mask_position_x_args = [0.2, 0.65, 0.65, 0.1]
         slider_mask_position_y_args = [0.2, 0.5, 0.65, 0.1]
         slider_mask_width_args = [0.2, 0.4, 0.65, 0.1]
@@ -324,6 +373,14 @@ class PlotInteractiveControls:
         radio_twin_image = [0.2, 0.10, 0.5, 0.15]
 
         # Define sliders
+        self.slider_propagation_distance = Slider(
+            self.__get_control_axis(slider_propagation_distance_args),
+            'Propagation distance (cm)',
+            0,
+            30,
+            valinit=self.propagation_distance
+        )
+
         self.slider_mask_position_x = Slider(
             self.__get_control_axis(slider_mask_position_x_args),
             'Mask Position (x)',
@@ -410,7 +467,7 @@ class PlotManager:
 def make_square_mask(size, mask_size, position):
     center_x, center_y = position
     mask = np.zeros((size, size))
-    mask[center_x:center_x+mask_size, center_y:center_y+mask_size] = 1
+    mask[center_y:center_y+mask_size, center_x:center_x+mask_size] = 1
     return mask
 
 def make_circle_mask(size, mask_size, position):

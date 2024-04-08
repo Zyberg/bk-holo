@@ -117,8 +117,8 @@ class Application:
             mask_width = self.state_manager.twin_image_radius
             mask_shape_index = self.state_manager.twin_image_shape_index
 
-            print('twinz', twin_images_coordinates)
-            reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object, mask_position, mask_width, mask_shape_index, twin_images_coordinates)
+            propagation_distance = 10
+            reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object, propagation_distance, mask_position, mask_width, mask_shape_index, twin_images_coordinates)
 
             # reconstructor.plot()
             reconstructor.plot_interactive()

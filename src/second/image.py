@@ -2,7 +2,8 @@ from PIL import Image as ImagePIL
 import numpy as np
 import matplotlib.pyplot as plt
 import os
-from pyfftw.interfaces.numpy_fft import fft2, ifft2, fftshift, ifftshift
+# from pyfftw.interfaces.numpy_fft import fft2, ifft2, fftshift, ifftshift
+from numpy.fft import fft2, ifft2, fftshift, ifftshift
 
 class Image:
     def __init__(self, path):
