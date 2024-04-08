@@ -6,10 +6,6 @@ from matplotlib.widgets import Slider, RadioButtons
 
 MASK_SHAPE_OPTIONS = ('Square', 'Circle')
 
-INITIAL_MASK_POSITION = 1000
-INITIAL_MASK_WIDTH = 200
-INITIAL_MASK_SHAPE_INDEX = 1
-
 def crop_image_with_mask(image, mask):
     """
     Crop the image to include only the region specified by the mask 
@@ -62,7 +58,7 @@ def crop_and_center_image(image, mask):
     return black_image
 
 class HologramReconstructor:
-    def __init__(self, reference_hologram_image, object_hologram_image):
+    def __init__(self, reference_hologram_image, object_hologram_image, mask_position, mask_width, mask_shape_index):
         self.reference_hologram_image = reference_hologram_image
         self.object_hologram_image = object_hologram_image
 
@@ -74,11 +70,10 @@ class HologramReconstructor:
 
         self.isolated_image_fft = None
 
-        self.mask_position = INITIAL_MASK_POSITION
-
-        maximum_mask_width = self.object_hologram_image.array.shape[0] // 2
-        self.mask_width = INITIAL_MASK_WIDTH if INITIAL_MASK_WIDTH < maximum_mask_width else maximum_mask_width
-        self.mask_shape = MASK_SHAPE_OPTIONS[INITIAL_MASK_SHAPE_INDEX]
+        self.mask_position = mask_position
+        self.mask_width = mask_width
+        self.mask_shape_index = mask_shape_index
+        self.mask_shape = MASK_SHAPE_OPTIONS[mask_shape_index]
 
         # Variables for interactive plotting
         self.axis_unmasked_region = None
@@ -226,7 +221,7 @@ class HologramReconstructor:
 
         max_mask_position = self.object_hologram_image.array.shape[0] - self.mask_width
         max_mask_width = self.object_hologram_image.array.shape[0] // 2
-        self.plot_interactive_controls = PlotInteractiveControls(max_mask_position, max_mask_width)
+        self.plot_interactive_controls = PlotInteractiveControls(self.mask_position, self.mask_width, self.mask_shape_index, max_mask_position, max_mask_width)
 
         # Set event handlers
         self.plot_interactive_controls.slider_mask_position.on_changed(self.callback_update_interactive_plots)
@@ -258,12 +253,16 @@ class HologramReconstructor:
 
 # TODO: move to another file
 class PlotInteractiveControls:
-    def __init__(self, max_mask_position, max_mask_width):
+    def __init__(self, mask_position, mask_width, mask_shape_index, max_mask_position, max_mask_width):
         self.figure = plt.figure(figsize=(6, 3)) 
 
         self.slider_mask_position = None
         self.slider_mask_width = None 
         self.radio_mask_shape = None
+
+        self.mask_position = mask_position
+        self.mask_width = mask_width
+        self.mask_shape_index = mask_shape_index
 
         self.max_mask_position = max_mask_position
         self.max_mask_width = max_mask_width
@@ -282,7 +281,7 @@ class PlotInteractiveControls:
             'Mask Position (xy)',
             0,
             self.max_mask_position,
-            valinit=INITIAL_MASK_POSITION
+            valinit=self.mask_position
         )
 
         self.slider_mask_width = Slider(
@@ -290,14 +289,14 @@ class PlotInteractiveControls:
             'Mask Width',
             0,
             self.max_mask_width,
-            valinit=INITIAL_MASK_WIDTH
+            valinit=self.mask_width
         )
 
         # Define radio buttons
         self.radio_mask_shape = RadioButtons(
             self.__get_control_axis(radio_buttons_args),
             MASK_SHAPE_OPTIONS,
-            active = INITIAL_MASK_SHAPE_INDEX
+            active = self.mask_shape_index
         )
 
     def __get_control_axis(self, position, facecolor = 'lightgoldenrodyellow'):

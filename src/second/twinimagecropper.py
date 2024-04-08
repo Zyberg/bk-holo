@@ -1,59 +1,92 @@
 import numpy as np
 from PIL import Image as ImagePIL
 from scipy import ndimage
+from skimage.filters import threshold_otsu, try_all_threshold
+from skimage.feature import peak_local_max
 
 class TwinImageCropper:
     def __init__(self, image):
         self.image = image
 
-    def find_twin_image_cropping_region(self):
-        threshold_value = self.__get_threshold_value()
-        print(f'Calculated threshold: {threshold_value}',)
-        # Apply thresholding to create a binary mask
-        binary_mask = self.image.array > threshold_value
+    def find_intensity_spots(self):
+        image = np.log(1 + np.abs(self.image.get_shifted()))
+        image = image - np.min(image)
+
+        masked_image, selected_coordinates = self.find_bright_spots(image)
         
-        # Find bounding boxes of connected components (twin images)
-        twin_image_bounding_boxes = self.find_connected_component_bounding_boxes(binary_mask)
-        
-        # Compute the cropping region around the twin images
-        cropping_region = self.compute_cropping_region(twin_image_bounding_boxes)
+        sorted_coordinates = sorted(selected_coordinates, key=lambda x: x[0])
+        radius = self.calculate_radius(sorted_coordinates)
 
-        return cropping_region
+        return sorted_coordinates, radius
 
-    def find_connected_component_bounding_boxes(self, image_array, min_size=1000):
-        labeled_array, num_features = ndimage.label(image_array)
 
-        # Perform connected component analysis
-        bounding_boxes = ndimage.find_objects(labeled_array)
-        component_areas = ndimage.sum(image_array, labeled_array, range(1, num_features+1))
+    def calculate_radius(self, coords):
+        distances = [np.linalg.norm(coords[i] - coords[j]) for i in range(3) for j in range(i+1, 3)]
 
-        # Filter out small components based on the minimum size threshold
-        filtered_bounding_boxes = [bbox for bbox, area in zip(bounding_boxes, component_areas) if area >= min_size]
+        radius = min(distances) / 2
 
-        print(filtered_bounding_boxes)
-        return filtered_bounding_boxes
+        return radius
 
-    def compute_cropping_region(self, bounding_boxes, padding=10):
-        # Compute the cropping region around the twin images
-        min_x, min_y, max_x, max_y = bounding_boxes
-        min_x = max(0, min_x - padding)
-        min_y = max(0, min_y - padding)
-        max_x = min(self.image.array.shape[1], max_x + padding)
-        max_y = min(self.image.array.shape[0], max_y + padding)
+    def find_bright_spots(self, image):
+        # Compute the Otsu threshold
+        thresh = threshold_otsu(image)
+        binary_map = image > thresh
 
-        return min_x, min_y, max_x, max_y
+        # Define the region around the center based on the binary map
+        center_y, center_x = np.array(image.shape) // 2
+        radius = image.shape[0] // 2  # Adjust the radius as needed
+        y, x = np.ogrid[-center_y:image.shape[0] - center_y, -center_x:image.shape[1] - center_x]
+        mask = x**2 + y**2 <= radius**2
+        region_of_interest = mask & binary_map 
 
-    def __get_threshold_value(self):
-        # Compute the histogram of the image
-        hist, _ = np.histogram(self.image.array.ravel(), bins=256, range=[0, 256])
-        
-        # Compute the cumulative distribution function (CDF) of the histogram
-        cdf = hist.cumsum()
-        
-        # Normalize the CDF
-        cdf_normalized = cdf / cdf.max()
-        
-        # Find the intensity value corresponding to the threshold
-        threshold_value = np.argmax(cdf_normalized > 0.5)
-        
-        return threshold_value
+        # Apply Otsu's method within the region of interest
+        threshold_region = threshold_otsu(image[region_of_interest])
+
+        # Create binary map for the region of interest using the second threshold
+        binary_map_region = np.zeros_like(image, dtype=bool)
+        binary_map_region[region_of_interest] = image[region_of_interest] > threshold_region
+
+        # Apply binary map on the original image
+        masked_image = image.copy()
+        masked_image[~binary_map_region] = 0  # Set non-binary regions to 0
+
+        # Find local maxima in the masked image
+        coordinates = peak_local_max(masked_image, min_distance=5)
+
+        # Sort coordinates by intensity value
+        sorted_coordinates = coordinates[np.argsort(masked_image[coordinates[:, 0], coordinates[:, 1]])[::-1]]
+
+        # Select the three highest peaks that are sufficiently separated
+        num_peaks = 3
+        selected_coordinates = [sorted_coordinates[0]]
+        for coord in sorted_coordinates[1:]:
+            if all(np.linalg.norm(coord - selected_coord) > 10 for selected_coord in selected_coordinates):
+                selected_coordinates.append(coord)
+            if len(selected_coordinates) == num_peaks:
+                break
+
+        return masked_image, selected_coordinates
+
+
+    
+
+        # fig, axes = plt.subplots(ncols=3, figsize=(8, 2.5))
+        # ax = axes.ravel()
+        # ax[0] = plt.subplot(1, 3, 1)
+        # ax[1] = plt.subplot(1, 3, 3, sharex=ax[0], sharey=ax[0])
+
+        # ax[0].imshow(image, cmap=plt.cm.gray)
+        # ax[0].set_title('Original')
+        # ax[0].axis('off')
+
+        # ax[1].imshow(masked_image, cmap=plt.cm.gray)
+        # selected_coordinates = np.array(selected_coordinates)
+        # plt.scatter(selected_coordinates[:, 1], selected_coordinates[:, 0], color='red', s=20)
+        # ax[1].set_title('Thresholded')
+        # ax[1].axis('off')
+
+
+
+        # for coord in selected_coordinates:
+        #     circle = Circle((coord[1], coord[0]), radius, color='red', fill=False)
+        #     ax[1].add_patch(circle)

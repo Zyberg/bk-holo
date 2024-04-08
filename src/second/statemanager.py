@@ -1,6 +1,10 @@
 from .image import Image
 import os
 
+INITIAL_MASK_POSITION = 1000
+INITIAL_MASK_WIDTH = 200
+INITIAL_MASK_SHAPE_INDEX = 1
+
 class StateManager:
     def __init__(self):
         self.paths = []
@@ -8,6 +12,11 @@ class StateManager:
 
         self.reference = None
         self.object = None
+
+        self.twin_image_coordinates = [INITIAL_MASK_POSITION, INITIAL_MASK_POSITION]
+        self.twin_image_radius = INITIAL_MASK_WIDTH
+        self.twin_image_shape_index = INITIAL_MASK_SHAPE_INDEX
+
 
     # TODO: refactor to use path
     def set_reference(self, path_index):
