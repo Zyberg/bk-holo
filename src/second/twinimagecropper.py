@@ -17,6 +17,8 @@ class TwinImageCropper:
         sorted_coordinates = sorted(selected_coordinates, key=lambda x: x[0])
         radius = self.calculate_radius(sorted_coordinates)
 
+        sorted_coordinates = np.flip(sorted_coordinates, axis=1)
+
         return sorted_coordinates, radius
 
 

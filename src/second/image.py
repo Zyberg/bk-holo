@@ -2,6 +2,7 @@ from PIL import Image as ImagePIL
 import numpy as np
 import matplotlib.pyplot as plt
 import os
+from pyfftw.interfaces.numpy_fft import fft2, ifft2, fftshift, ifftshift
 
 class Image:
     def __init__(self, path):
@@ -30,14 +31,14 @@ class Image:
 
     def get_fft(self):
         if self.fft is None:
-            self.fft = np.fft.fft2(self.array)
+            self.fft = fft2(self.array)
 
         return self.fft
 
 
     def get_shifted(self):
         if self.fft_shifted is None:
-            self.fft_shifted = np.fft.fftshift(self.get_fft())
+            self.fft_shifted = fftshift(self.get_fft())
 
         return self.fft_shifted
 

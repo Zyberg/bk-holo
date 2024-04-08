@@ -103,19 +103,22 @@ class Application:
 
         elif action == ACTION_RECONSTRUCT:
             twin_image_cropper = TwinImageCropper(self.state_manager.object)
-            twin_image_coordinates, twin_image_radius = twin_image_cropper.find_intensity_spots()
+            twin_images_coordinates, twin_image_radius = twin_image_cropper.find_intensity_spots()
 
 
             # Use the top left twin image
-            self.state_manager.twin_image_coordinates = twin_image_coordinates[0]
+            self.state_manager.twin_image_coordinates = twin_images_coordinates[0]
+            # self.state_manager.twin_image_coordinates[0] = self.state_manager.twin_image_coordinates[0] + twin_image_radius//2
+            # self.state_manager.twin_image_coordinates[1] = self.state_manager.twin_image_coordinates[1] - twin_image_radius//2
             self.state_manager.twin_image_radius = twin_image_radius
 
-            mask_position = self.state_manager.twin_image_coordinates[0]
+            mask_position = self.state_manager.twin_image_coordinates
             # maximum_mask_width = self.object_hologram_image.array.shape[0] // 2
             mask_width = self.state_manager.twin_image_radius
             mask_shape_index = self.state_manager.twin_image_shape_index
 
-            reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object, mask_position, mask_width, mask_shape_index)
+            print('twinz', twin_images_coordinates)
+            reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object, mask_position, mask_width, mask_shape_index, twin_images_coordinates)
 
             # reconstructor.plot()
             reconstructor.plot_interactive()
