@@ -1,0 +1,139 @@
+import os
+import numpy as np
+
+# ===================================================
+# SETUP
+# ---------------------------------------------------
+
+# TODO: use more generic path
+hologram_name = '21057145-2024-03-26-150331'
+
+path_hologram = '/home/zyberg/bin/bakalauras/src/third/scripts/second/data'
+path_twin_coordinates = '/home/zyberg/bin/bakalauras/src/third/temporary/twin-coordinates'
+path_complex_field = '/home/zyberg/bin/bakalauras/src/third/temporary/reconstructed-fields'
+path_propagated_field = '/home/zyberg/bin/bakalauras/src/third/temporary/propagated-fields'
+path_reconstructed_intensity = '/home/zyberg/bin/bakalauras/src/third/temporary/reconstructed-intensity'
+path_focus_evaluation = '/home/zyberg/bin/bakalauras/src/third/temporary/focus-evaluation'
+path_distance_sharpest_focus = '/home/zyberg/bin/bakalauras/src/third/temporary/distance-sharpest-focus'
+
+def make_path(path_directory, file_type='tif', tag=None):
+    global hologram_name
+
+    path = f'{path_directory}/{hologram_name}'
+
+    if tag is not None:
+        path += f'--{tag}'
+
+    return f'{path}.{file_type}'
+
+
+
+min_distance = 0.001  # Minimum propagation distance in meters
+# max_distance = 0.005   # Maximum propagation distance in meters
+max_distance = 0.3   # Maximum propagation distance in meters
+step_size = 0.001    # Step size for iterating over distances
+
+# Compute sharpness metrics for each propagation distance
+propagation_distances = np.arange(min_distance, max_distance + step_size, step_size)
+
+
+# ===================================================
+# RULES
+# ---------------------------------------------------
+rule all:
+    input: 
+        a = make_path(path_distance_sharpest_focus, 'json'),
+        b = make_path(path_distance_sharpest_focus, 'png', 'tenengrad'),
+        c = make_path(path_distance_sharpest_focus, 'png', 'normalized_gradient_variance')
+    
+    # make_path(path_propagated_field, 'png', 'propagation--{propagation_distances}')
+    #, propagation_distance=propagation_distances)
+
+
+rule find_twin_coordinates:
+    input: make_path(path_hologram)
+    output: make_path(path_twin_coordinates, 'json')
+    conda:
+        "bakalauras"
+    shell:
+        "cd scripts && python find_twin_coordinates.py {input} {output}"
+
+
+rule reconstruct_complex_field:
+    input: 
+        twin_coordinates = make_path(path_twin_coordinates, 'json'),
+        hologram = make_path(path_hologram)
+    output: make_path(path_complex_field, 'npy')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python reconstruct_complex_field.py {input.hologram} {input.twin_coordinates} {output}"
+
+# Take complex field and create different positions by propagation       
+
+rule propagate_hologram_angular_spectrum:
+    input: make_path(path_complex_field, 'npy')
+    output: 
+        make_path(path_propagated_field, 'npy', r'propagation--{propagation_distance}')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python propagate_complex_field.py {input} {wildcards.propagation_distance} {output}"
+
+
+rule reconstruct_intensity:
+    input: make_path(path_propagated_field, 'npy', r'propagation--{propagation_distance}')
+    output: make_path(path_reconstructed_intensity, 'npy', r'reconstruction--{propagation_distance}')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python reconstruct_intensity.py {input} {output}"
+
+rule plot_intensity:
+    input: make_path(path_reconstructed_intensity, 'npy', r'reconstruction--{propagation_distance}')
+    output: make_path(path_reconstructed_intensity, 'png', r'reconstruction--{propagation_distance}')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python reconstruct_intensity.py {input} {output}"
+
+
+rule evaluate_focus_parameters:
+    input: make_path(path_reconstructed_intensity, 'npy', r'reconstruction--{propagation_distance}')
+    output: make_path(path_focus_evaluation, 'json', r'focus--{propagation_distance}')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python evaluate_focus_parameters.py {input} {wildcards.propagation_distance} {output}"
+
+input_all_focus_evaluations = expand(make_path(path_focus_evaluation, 'json', 'focus--{propagation_distance}'), propagation_distance=propagation_distances)
+
+# TODO: have all these in a config somewhere
+# rule plot_tenengrad:
+#     input: input_all_focus_evaluations
+#     output: make_path(path_distance_sharpest_focus, 'png', 'tenengrad')
+#     conda: "bakalauras"
+#     shell:
+#         "cd scripts && python plot_tenengrad.py {output} {path_focus_evaluation}"
+
+rule plot_normalized_gradient_variance:
+    input: input_all_focus_evaluations
+    output: make_path(path_distance_sharpest_focus, 'png', 'normalized_gradient_variance')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python plot_normalized_gradient_variance.py {output} {path_focus_evaluation}"
+
+rule evaluate_focus_length_from_tenengrad:
+    input: input_all_focus_evaluations
+    output: make_path(path_distance_sharpest_focus, 'png', 'tenengrad')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python evaluate_focus_length_from_tenengrad.py {output} {path_focus_evaluation}"
+
+rule evaluate_distance_sharpest_focus:
+    input: input_all_focus_evaluations
+    output: make_path(path_distance_sharpest_focus, 'json')
+    conda: "bakalauras"
+    shell:
+        "cd scripts && python evaluate_distance_sharpest_focus.py {output} {path_focus_evaluation}"
+
+# rule reconstruct_intensity:
+#     input: path_propagated_field
+#     output: path_reconstructed_phase
+#     run:
+#         shell("python reconstruct_intensity.py {input}")

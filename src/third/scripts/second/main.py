@@ -108,8 +108,6 @@ class Application:
 
             # Use the top left twin image
             self.state_manager.twin_image_coordinates = twin_images_coordinates[0]
-            # self.state_manager.twin_image_coordinates[0] = self.state_manager.twin_image_coordinates[0] + twin_image_radius//2
-            # self.state_manager.twin_image_coordinates[1] = self.state_manager.twin_image_coordinates[1] - twin_image_radius//2
             self.state_manager.twin_image_radius = twin_image_radius
 
             mask_position = self.state_manager.twin_image_coordinates
@@ -117,7 +115,7 @@ class Application:
             mask_width = self.state_manager.twin_image_radius
             mask_shape_index = self.state_manager.twin_image_shape_index
 
-            propagation_distance = 10
+            propagation_distance = 0
             reconstructor = HologramReconstructor(self.state_manager.reference, self.state_manager.object, propagation_distance, mask_position, mask_width, mask_shape_index, twin_images_coordinates)
 
             # reconstructor.plot()

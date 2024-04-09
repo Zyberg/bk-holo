@@ -2,18 +2,66 @@ import matplotlib.pyplot as plt
 from matplotlib import gridspec
 import numpy as np
 # from scipy.fft import fft2, ifft2, fftshift, ifftshift
+import scipy.ndimage as ndimage
 from numpy.fft import fft2, ifft2, fftshift, ifftshift
 import pyfftw
 from matplotlib.widgets import Slider, RadioButtons
+from .autofocus import AutofocusManager, angular_spectrum
 
 MASK_SHAPE_OPTIONS = ('Square', 'Circle')
 
-def angular_spectrum(complex_field, wavelength, pixel_size, propagation_distance):
+def measure_sharpness(image):
     """
-    Perform numerical propagation using the angular spectrum method.
+    Measure the sharpness of an image using Sobel edge detection.
+    
+    Parameters:
+    - image: 2D array representing the image
+    
+    Returns:
+    - sharpness: Sharpness metric value
+    """
+    sobel_x = ndimage.sobel(image, axis=0, mode='reflect')
+    sobel_y = ndimage.sobel(image, axis=1, mode='reflect')
+    gradient_magnitude = np.sqrt(sobel_x**2 + sobel_y**2)
+    sharpness = np.mean(gradient_magnitude)
+    return sharpness
 
+def autofocus(complex_field_fft, wavelength, pixel_size, min_distance, max_distance, step_size):
+    """
+    Perform autofocusing by maximizing image sharpness.
+    
     Parameters:
     - complex_field: 2D array containing the complex field distribution at the hologram plane
+    - wavelength: Wavelength of the light (in meters)
+    - pixel_size: Size of a pixel on the sensor (in meters)
+    - min_distance: Minimum propagation distance to consider (in meters)
+    - max_distance: Maximum propagation distance to consider (in meters)
+    - step_size: Step size for iterating over propagation distances (in meters)
+    
+    Returns:autofocus
+    - best_distance: Optimal propagation distance that maximizes sharpness
+    - sharpness_values: List of sharpness values measured at different propagation distances
+    """
+    distances = np.arange(min_distance, max_distance + step_size, step_size)
+    sharpness_values = []
+    for distance in distances:
+        print(f'Processing distance {distance}')
+        propagated_field = angular_spectrum(complex_field_fft, wavelength, pixel_size, distance)
+        reconstructed_intensity = np.abs(propagated_field)**2
+        sharpness = measure_sharpness(reconstructed_intensity)
+        sharpness_values.append(sharpness)
+
+        print(f'Sharpnes: {sharpness}')
+        print('----------------------')
+    best_distance = distances[np.argmax(sharpness_values)]
+    return best_distance, sharpness_values
+
+def fresnel_propagation(complex_field_fft, wavelength, pixel_size, propagation_distance):
+    """
+    Perform Fresnel propagation of a complex field to the desired distance.
+
+    Parameters:
+    - complex_field_fft: 2D array containing the complex field distribution at the hologram plane (FFT)
     - wavelength: Wavelength of the light (in meters)
     - pixel_size: Size of a pixel on the sensor (in meters)
     - propagation_distance: Distance to propagate the field (in meters)
@@ -23,7 +71,7 @@ def angular_spectrum(complex_field, wavelength, pixel_size, propagation_distance
     """
 
     # Compute the size of the input field
-    rows, cols = complex_field.shape
+    rows, cols = complex_field_fft.shape
     nyquist_sampling = 1 / (2 * pixel_size)
 
     # Compute the frequencies in the x and y directions
@@ -36,17 +84,14 @@ def angular_spectrum(complex_field, wavelength, pixel_size, propagation_distance
     # Compute the wave number
     k = 2 * np.pi / wavelength
 
-    # Compute the transfer function
-    transfer_function = np.exp(1j * k * np.sqrt(1 - (wavelength * u_grid) ** 2 - (wavelength * v_grid) ** 2))
+    # Compute the propagation kernel
+    kernel = np.exp(1j * k * propagation_distance) * np.exp(1j * k * (u_grid ** 2 + v_grid ** 2) * pixel_size ** 2 / 2)
 
-    # Apply Fourier transform to the input field
-    complex_field_fft = fft2(complex_field)
+    # Perform Fresnel propagation
+    propagated_field_fft = complex_field_fft * kernel
 
-    # Apply transfer function in the frequency domain
-    complex_field_propagated_fft = complex_field_fft * transfer_function
-
-    # Perform inverse Fourier transform to obtain the propagated field
-    propagated_field = ifft2(complex_field_propagated_fft)
+    # Inverse Fourier transform to obtain the propagated field
+    propagated_field = ifft2(propagated_field_fft)
 
     return propagated_field
 
@@ -167,14 +212,22 @@ class HologramReconstructor:
         if self.isolated_image_fft is None:
             self.extract_twin_image()
 
-        reconstructed_field = ifft2(self.isolated_image_fft)
+        # reconstructed_field = ifft2(self.isolated_image_fft)
 
         print(self.propagation_distance)
-        propagated_field = angular_spectrum(reconstructed_field, 6.328e-7, 3.45e-6, self.propagation_distance // 10)
+        wavelength = 6.328e-7
+        pixel_size = 3.45e-6
+        autofocus_manager = AutofocusManager(self.isolated_image_fft, wavelength, pixel_size)
 
+        # propagated_field = angular_spectrum(self.isolated_image_fft, 6.328e-7, 3.45e-6, self.propagation_distance // 10)
+        best_distance = autofocus_manager.autofocus()
+        
+        # print(f'The best ?distance is {best_distance} with sharpness values:', sharpness_values)
+        propagated_field = angular_spectrum(self.isolated_image_fft, wavelength, pixel_size, self.propagation_distance // 10)
         # self.reconstructed_phase = np.angle(reconstructed_field)
         # self.reconstructed_intensity = np.abs(reconstructed_field)**2
         self.reconstructed_intensity = np.abs(propagated_field)**2
+        print('changed reconstructed intensity to propagated field')
 
     def reconstruct(self):
         self.extract_twin_image()
@@ -247,6 +300,7 @@ class HologramReconstructor:
         if self.axis_reconstructed_intensity is None:
             self.axis_reconstructed_intensity = self.__get_ax()
 
+        print('plotted reconstructed intensity again')
         self.axis_reconstructed_intensity.imshow(self.reconstructed_intensity, cmap='gray')
         self.axis_reconstructed_intensity.set_title('Reconstructed Intensity')
         return self.axis_reconstructed_intensity
@@ -377,7 +431,7 @@ class PlotInteractiveControls:
             self.__get_control_axis(slider_propagation_distance_args),
             'Propagation distance (cm)',
             0,
-            30,
+            20,
             valinit=self.propagation_distance
         )
 

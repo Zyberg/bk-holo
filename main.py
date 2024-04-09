@@ -17,11 +17,7 @@ def main():
         
         main.main()
     elif args.parameter == 'antras':
-        try:
-            from src.second import main
-        except ImportError:
-            print("Error: Unable to import src/first/main.py.")
-            sys.exit(1)
+        from src.second import main
         
         main.main(args.sequence)
     else:
