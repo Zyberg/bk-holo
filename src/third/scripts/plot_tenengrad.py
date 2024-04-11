@@ -35,6 +35,8 @@ if __name__ == "__main__":
 
     distances, tenengrads = get_normalized_gradient_variance(args.directory_path)
 
+    print(tenengrads)
+
     ## ------------------------------
     # Persist results
     ## ------------------------------

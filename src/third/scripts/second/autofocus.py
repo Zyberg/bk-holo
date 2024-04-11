@@ -3,8 +3,81 @@ import scipy.ndimage as ndimage
 import scipy.ndimage.filters as filters
 from numpy.fft import fft2, ifft2, fftshift, ifftshift
 import matplotlib.pyplot as plt
+def angular_spectrum(field, wavelength, pixel_size, z):
+    """
+    Perform Angular Spectrum Propagation.
+    
+    Parameters:
+        field (2D complex array): Input complex field.
+        z (float): Propagation distance (in meters).
+        wavelength (float): Wavelength of light (in meters).
+        pixel_size (float): Pixel size of the holographic sensor (in meters).
+        
+    Returns:
+        propagated_field (2D complex array): Propagated complex field.
+    """
+    # Perform 2D Fourier Transform
+    freq_field = fftshift(field)
+    
+    # Calculate spatial frequencies
+    u, v = np.meshgrid(np.fft.fftfreq(field.shape[1], pixel_size), np.fft.fftfreq(field.shape[0], pixel_size))
+    
+    # Calculate transfer function for propagation
+    transfer_function = np.exp(-1j * np.pi * wavelength * z * (u**2 + v**2))
+    
+    # Apply transfer function
+    propagated_freq_field = freq_field * transfer_function
+    
+    # Perform inverse Fourier Transform
+    propagated_field = ifft2(ifftshift(propagated_freq_field))
+    
+    return propagated_field
 
-def angular_spectrum(complex_field_fft, wavelength, pixel_size, propagation_distance):
+# import numpy as np
+# from numpy.fft import fft2, ifft2, fftshift, ifftshift
+
+# def propagate(field, wavelength, pixel_size, z):
+#     # Perform 2D Fourier Transform and shift zero-frequency component to the center
+#     freq_field = fftshift(fft2(field))
+    
+#     # Calculate spatial frequencies with proper scaling by pixel_size
+#     ny, nx = field.shape
+#     u = np.fft.fftfreq(nx, pixel_size)
+#     v = np.fft.fftfreq(ny, pixel_size)
+#     u, v = np.meshgrid(u, v)  # Create 2D grid of frequencies
+    
+#     # Calculate transfer function for propagation using the Fresnel approximation
+#     transfer_function = np.exp(-1j * np.pi * wavelength * z * (u**2 + v**2))
+    
+#     # Apply the transfer function to the frequency-domain field
+#     propagated_freq_field = freq_field * transfer_function
+    
+#     # Inverse Fourier Transform to return to spatial domain
+#     propagated_field = ifft2(ifftshift(propagated_freq_field))
+    
+#     return propagated_field
+
+
+
+def propagate(field, wavelength, pixel_size, z):
+    # Perform 2D Fourier Transform
+    freq_field = fftshift(fft2(field))
+    
+    # Calculate spatial frequencies
+    u, v = np.meshgrid(np.fft.fftfreq(field.shape[1], pixel_size), np.fft.fftfreq(field.shape[0], pixel_size))
+    
+    # Calculate transfer function for propagation
+    transfer_function = np.exp(-1j * np.pi * wavelength * z * (u**2 + v**2))
+    
+    # Apply transfer function
+    propagated_freq_field = freq_field * transfer_function
+    
+    # Perform inverse Fourier Transform
+    propagated_field = ifft2(ifftshift(propagated_freq_field))
+    
+    return propagated_field
+
+def angular_spectrum_old(complex_field_fft, wavelength, pixel_size, propagation_distance):
     """
     Perform numerical propagation using the angular spectrum method.
 

@@ -27,6 +27,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process twin coordinates.")
     parser.add_argument("image_path", type=str, help="Path to the image file")
     parser.add_argument("twin_coordinates_path", type=str, help="Path to the twin coordinates file")
+    parser.add_argument("twin_image_direction", type=str, help="Twin image direction")
     parser.add_argument("output_path", type=str, help="Path to save the output file")
     args = parser.parse_args()
 
@@ -44,11 +45,12 @@ if __name__ == "__main__":
     print("Twin images coordinates:", twin_images_coordinates)
     print("Twin image radius:", twin_image_radius)
 
-    # TODO: read args for twin_images_coordinates[0] or twin_images_coordinates[2]
+    twin_image_index = 0 if args.twin_image_direction == 'left' else 2
     # TODO: read args for mask_shape_index
+
     hologram_reconstruction_manager = HologramReconstructionManager(
         hologram,
-        twin_images_coordinates[0],
+        twin_images_coordinates[twin_image_index],
         int(twin_image_radius),
         1 # Circle
     )

@@ -1,17 +1,19 @@
 import cv2
 import glob
 import os
+import re
 
-direction = 'left'
+direction = 'right'
 
 # Directory containing the images
-image_dir = f'/home/zyberg/bin/bakalauras/src/second/autofocus/{direction}/'
+image_dir = f'/home/zyberg/bin/bakalauras/src/third/temporary/reconstructed-intensity/{direction}/'
 
 # Output video file name
 output_video = f'twin-{direction}.mp4'
 
 # Get a list of image files sorted by distance
-image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')), key=lambda x: float(os.path.splitext(os.path.basename(x))[0]))
+# image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')), key=lambda x: float(re.search(r'(\d+\.\d+)$', os.path.splitext(os.path.basename(x)).group(1))[0]))
+image_files = sorted(glob.glob(os.path.join(image_dir, '*.png')), key=lambda x: float(re.search(r'(\d+\.\d+)$', os.path.splitext(os.path.basename(x))[0]).group(1)))
 
 # Define video properties
 frame_width = 1920
