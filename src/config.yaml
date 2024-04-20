@@ -1,0 +1,21 @@
+# hologram_name: '21057145-2024-03-26-150331'
+hologram_name: 'center'
+
+# Base directories
+base_scripts_path: 'scripts'
+
+# Specific data and results paths
+path_hologram: 'data/holograms'  # Store hologram data here
+path_twin_coordinates: 'results/temporary/twin-coordinates'
+path_complex_field: 'results/temporary/reconstructed-fields/{twin_direction}'
+path_propagated_field: 'results/temporary/propagated-fields/{twin_direction}'
+path_reconstructed_intensity: 'results/temporary/reconstructed-intensity/{twin_direction}'
+path_distance_sharpest_focus: 'results/temporary/distance-sharpest-focus/{twin_direction}'
+path_focus_evaluation: 'results/temporary/focus-evaluation/{twin_direction}'
+path_focus_evaluation_combined: 'results/temporary/focus-evaluation-combined/{twin_direction}'
+
+# Parameters for propagation distances
+min_distance: 0.001
+# max_distance: 0.003
+max_distance: 0.17
+step_size: 0.001

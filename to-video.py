@@ -3,10 +3,10 @@ import glob
 import os
 import re
 
-direction = 'right'
+direction = 'left'
 
 # Directory containing the images
-image_dir = f'/home/zyberg/bin/bakalauras/src/third/temporary/reconstructed-intensity/{direction}/'
+image_dir = f'/home/zyberg/bin/bakalauras/src/results/temporary/reconstructed-intensity/{direction}/'
 
 # Output video file name
 output_video = f'twin-{direction}.mp4'

@@ -1,0 +1,114 @@
+import numpy as np
+
+# Load configuration settings from 'config.yaml'
+configfile: 'config.yaml'
+
+# Calculate propagation distances dynamically based on the config
+propagation_distances = np.arange(config['min_distance'], config['max_distance'] + config['step_size'], config['step_size'])
+
+# Main rule to coordinate all outputs
+rule all:
+    input:
+        # expand("{path}/{focus_param}--{hologram}.png", path=config['path_distance_sharpest_focus'], focus_param=['tenengrad', 'normalized_gradient_variance'], hologram=config['hologram_name'], twin_direction=['left', 'right']),
+        expand(config['path_reconstructed_intensity'] + "/reconstruction--{distance}.png", distance=propagation_distances, twin_direction=['left', 'right'])
+
+# Find twin coordinates
+rule find_twin_coordinates:
+    input:
+        f"{config['path_hologram']}/{config['hologram_name']}.tif"
+    output:
+        f"{config['path_twin_coordinates']}/coordinates.json"
+    conda: "bakalauras"
+    shell:
+        "python scripts/find_twin_coordinates.py {input} {output}"
+
+# Reconstruct complex field
+rule reconstruct_complex_field:
+    input:
+        twin_coordinates=f"{config['path_twin_coordinates']}/coordinates.json",
+        hologram=f"{config['path_hologram']}/{config['hologram_name']}.tif"
+    output:
+        complex_field=f"{config['path_complex_field']}/complex_field.npy"
+    conda: "bakalauras"
+    shell:
+        "python scripts/reconstruct_complex_field.py {input.hologram} {input.twin_coordinates} {wildcards.twin_direction} {output}"
+
+# Propagate hologram using angular spectrum
+rule propagate_hologram_angular_spectrum:
+    input:
+        f"{config['path_complex_field']}/complex_field.npy"
+    output:
+        config['path_propagated_field'] + "/propagation--{distance}.npy"
+    conda: "bakalauras"
+    shell:
+        "python scripts/propagate_complex_field.py {input} {wildcards.distance} {output}"
+
+# Reconstruct intensity
+rule reconstruct_intensity:
+    input:
+        config['path_propagated_field'] + "/propagation--{distance}.npy"
+    output:
+        config['path_reconstructed_intensity'] + "/reconstruction--{distance}.npy" 
+    conda: "bakalauras"
+    shell:
+        "python scripts/reconstruct_intensity.py {input} {output}"
+
+# Plot intensity
+rule plot_intensity:
+    input:
+        f"{config['path_reconstructed_intensity']}/reconstruction--{{distance}}.npy" 
+    output:
+        f"{config['path_reconstructed_intensity']}/reconstruction--{{distance}}.png"
+    conda: "bakalauras"
+    shell:
+        "python scripts/plot_intensity.py {input} {output}"
+
+# Evaluate focus parameters
+rule evaluate_focus_parameters:
+    input:
+        f"{config['path_reconstructed_intensity']}/reconstruction--{{distance}}.npy"  
+    output:
+        f"{config['path_focus_evaluation']}/focus--{{distance}}.json"
+    conda: "bakalauras"
+    shell:
+        "python scripts/evaluate_focus_parameters.py {input} {output}"
+
+# Combine evaluated focus parameters
+rule combine_evaluated_focus_parameters:
+    input:
+        expand("{path}/focus--{distance}.json", path=config['path_focus_evaluation'], distance=propagation_distances)
+    output:
+        f"{config['path_focus_evaluation_combined']}/combined_focus_parameters--{config['hologram_name']}.json"
+    conda: "bakalauras"
+    shell:
+        "python scripts/combine_focus_parameters.py {input} {output}"
+
+# Plot normalized gradient variance
+rule plot_normalized_gradient_variance:
+    input:
+        f"{config['path_focus_evaluation_combined']}/combined_focus_parameters--{config['hologram_name']}.json"
+    output:
+        f"{config['path_distance_sharpest_focus']}/normalized_gradient_variance--{config['hologram_name']}.png"
+    conda: "bakalauras"
+    shell:
+        "python scripts/plot_normalized_gradient_variance.py {input} {output}"
+
+# Evaluate focus length from Tenengrad
+rule evaluate_focus_length_from_tenengrad:
+    input:
+        f"{config['path_focus_evaluation_combined']}/combined_focus_parameters--{config['hologram_name']}.json"
+    output:
+        f"{config['path_distance_sharpest_focus']}/tenengrad--{config['hologram_name']}.png"
+    conda: "bakalauras"
+    shell:
+        "python scripts/evaluate_focus_length_from_tenengrad.py {input} {output}"
+
+# Evaluate distance to sharpest focus
+rule evaluate_distance_sharpest_focus:
+    input:
+        f"{config['path_focus_evaluation_combined']}/combined_focus_parameters.json"
+    output:
+        f"{config['path_distance_sharpest_focus']}/sharpest_focus_distance.json"
+    conda: "bakalauras"
+    shell:
+        "python scripts/evaluate_distance_sharpest_focus.py {input} {output}"

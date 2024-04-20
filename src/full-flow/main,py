@@ -1,0 +1,91 @@
+from PIL import Image
+import numpy as np
+import cv2
+from scipy.fft import fft2, ifft2, fftshift, ifftshift
+
+# import matplotlib.pyplot as plt
+
+from load import load_hologram
+from mask import make_circle_mask
+from reference import model_reference_wave, model_spherical_reference_wave
+# from reconstruct import reconstruct_wave_field
+
+from propagate import PropagationManager
+
+wavelength = 6.328e-7 # Wavelength of light (m)
+pixel_size = dx = dy = 3.45e-6  # Sampling interval (m)
+
+hologram = load_hologram("/home/zyberg/bin/bakalauras/src/data/holograms/center.tif")
+
+H_f = fftshift(fft2(hologram))
+mask = make_circle_mask(hologram.shape[0], 79, [1224,1240])
+A = H_f * mask
+
+# TODO:Should I do ifft2(ifftshift(A)) before anything?
+
+
+
+# ****************************************
+# ****************************************
+# ****************************************
+
+# Reconstruct the wavefront
+reconstructed_wavefront = ifft2(ifftshift(A))
+
+# Compute the spatial frequencies only once
+ny, nx = A.shape
+fx = np.fft.fftfreq(nx, d=dx)
+fy = np.fft.fftfreq(ny, d=dx)
+FX, FY = np.meshgrid(fftshift(fx), fftshift(fy))
+
+propagation_manager = PropagationManager(FX, FY, A)
+
+# plt.imshow(np.abs(A) ** 2)
+# plt.plot()
+
+cv2.imshow('asdadass Image', np.abs(A) ** 2)
+
+
+# ****************************************
+# Analysis
+# ****************************************
+# angle = np.deg2rad(5)
+# E_reference = model_reference_wave(nx, ny, wavelength, angle, pixel_size)
+# E_reference = model_spherical_reference_wave(nx, ny, dx, dx, wavelength, 0.1)
+
+# E_reference_conjugate = np.conj(E_reference)
+
+# cv2.imshow('A Image', np.log(np.abs(E_reference) + 1))
+# cv2.imshow('B Image', np.abs(E_reference_conjugate))
+
+
+# ****************************************
+# Rendering
+# ****************************************
+def update_image(val):
+    global wavelength, pixel_size
+    z = cv2.getTrackbarPos('Propagation Distance', 'Reconstructed Image') * 1e-2  # Scale factor for z
+    focused_wavefront = propagation_manager.propagate_simple(z, wavelength)
+
+    image_to_show = np.abs(focused_wavefront) / np.max(np.abs(focused_wavefront))
+
+    cv2.imshow('Reconstructed Image', image_to_show)
+
+
+
+z_initial = 0.01  # Propagation distance (m)
+z_max = 0.23
+
+# Setup display parameters
+cv2.namedWindow('Reconstructed Image', cv2.WINDOW_NORMAL)
+cv2.createTrackbar('Propagation Distance', 'Reconstructed Image', int(z_initial * 100), int(z_max * 100), update_image)
+
+# Initialize display
+update_image(0) 
+
+# Display loop
+while True:
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
+
+cv2.destroyAllWindows()

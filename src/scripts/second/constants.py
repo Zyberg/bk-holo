@@ -1,0 +1,11 @@
+
+ACTION_SELECT_REFERENCE = 'Select Reference'
+ACTION_SELECT_OBJECT = 'Select Object'
+ACTION_PERFORM_FFT = 'Perform FFT'
+ACTION_RECONSTRUCT = 'Reconstruct'
+ACTION_DISPLAY_REFERENCE = 'Display Reference'
+ACTION_DISPLAY_OBJECT = 'Display Object'
+ACTION_CLOSE = 'Close'
+ACTION_DISPLAY_FFT_REFERENCE = 'Display FFT of Reference'
+ACTION_DISPLAY_FFT_OBJECT = 'Display FFT of Object'
+ACTION_DISPLAY_RECONSTRUCTED_PHASE = 'Display Reconstructed Phase'
