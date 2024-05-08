@@ -3,7 +3,7 @@ import glob
 import os
 import re
 
-direction = 'left'
+direction = 'right'
 
 # Directory containing the images
 image_dir = f'/home/zyberg/bin/bakalauras/src/results/temporary/reconstructed-intensity/{direction}/'

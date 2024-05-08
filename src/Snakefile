@@ -22,6 +22,7 @@ rule find_twin_coordinates:
     shell:
         "python scripts/find_twin_coordinates.py {input} {output}"
 
+# TODO: to be done
 # Reconstruct complex field
 rule reconstruct_complex_field:
     input:
@@ -31,8 +32,10 @@ rule reconstruct_complex_field:
         complex_field=f"{config['path_complex_field']}/complex_field.npy"
     conda: "bakalauras"
     shell:
-        "python scripts/reconstruct_complex_field.py {input.hologram} {input.twin_coordinates} {wildcards.twin_direction} {output}"
+        "python scripts/reconstruct_complex_field_new.py {input.hologram} {input.twin_coordinates} {wildcards.twin_direction} {output}"
+        # "python scripts/reconstruct_complex_field.py {input.hologram} {input.twin_coordinates} {wildcards.twin_direction} {output}"
 
+# TODO: to be done
 # Propagate hologram using angular spectrum
 rule propagate_hologram_angular_spectrum:
     input:
@@ -41,7 +44,8 @@ rule propagate_hologram_angular_spectrum:
         config['path_propagated_field'] + "/propagation--{distance}.npy"
     conda: "bakalauras"
     shell:
-        "python scripts/propagate_complex_field.py {input} {wildcards.distance} {output}"
+        "python scripts/propagate_complex_field_new.py {input} {wildcards.distance} {output}"
+        # "python scripts/propagate_complex_field.py {input} {wildcards.distance} {output}"
 
 # Reconstruct intensity
 rule reconstruct_intensity:

@@ -48,11 +48,17 @@ if __name__ == "__main__":
     twin_image_index = 0 if args.twin_image_direction == 'left' else 2
     # TODO: read args for mask_shape_index
 
+
+    coords = twin_images_coordinates[twin_image_index]
+    coords[0] = coords[0] - 15
+    coords[1] = coords[1] - 15
+
     hologram_reconstruction_manager = HologramReconstructionManager(
         hologram,
-        twin_images_coordinates[twin_image_index],
-        int(twin_image_radius),
-        1 # Circle
+        [1200, 1270], # twin_images_coordinates[twin_image_index],
+        800, #int(twin_image_radius),
+        # 1 # Circle
+        0 # Square
     )
 
     reconstructed_field, mask = hologram_reconstruction_manager.reconstruct()
